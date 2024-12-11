@@ -12,11 +12,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        xcode: [ Xcode_14.3, Xcode_15.2.0 ]
-        os: [ macos-13 ]
+        xcode: [ Xcode_16 ]
+        os: [ macos-14 ]
         include:
-          - xcode: Xcode_15.4
-            os: macos-14
           - xcode: Xcode_16
             os: macos-14
     steps:
