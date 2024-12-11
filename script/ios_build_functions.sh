@@ -39,13 +39,8 @@ function setup_build_environment ()
         CAN_BUILD_64BIT="1"
     fi
 
-    ARCHS="i386 armv7 armv7s"
-    if [ "${CAN_BUILD_64BIT}" -eq "1" ]
-    then
-        # For some stupid reason cmake needs simulator
-        # builds to be first
-        ARCHS="x86_64 ${ARCHS} arm64"
-    fi
+    ARCHS="x86_64 arm64"
+    
 }
 
 function build_all_archs ()
@@ -63,7 +58,7 @@ function build_all_archs ()
 
     for ARCH in ${ARCHS}
     do
-        if [ "${ARCH}" == "i386" ] || [ "${ARCH}" == "x86_64" ]
+        if [ "${ARCH}" == "x86_64" ]
         then
             PLATFORM="iphonesimulator"
         else

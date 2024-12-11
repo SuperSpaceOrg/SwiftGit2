@@ -29,7 +29,7 @@ function build_libgit2 ()
     pushd "build" > /dev/null
 
     # LOL Cmake
-    if [ "${ARCH}" != "i386" ] && [ "${ARCH}" != "x86_64" ]
+    if [ "${ARCH}" != "x86_64" ]
     then
         SYS_ROOT="-DCMAKE_OSX_SYSROOT=${SDKROOT}"
     fi
