@@ -70,7 +70,7 @@ function build_all_archs ()
         fi
         if [ "${ARCH}" == "arm64" ] && [ "${PLATFORM}"  == "iphonesimulator" ];
         then
-            HOST="aarch64-apple-ios-sim"
+            HOST="arm64-apple-darwin"
         fi 
         echo "Building ${LIBRARY_NAME} for ${SDKNAME} ${ARCH} ${PLATFORM} ${HOST}"
         echo "Please stand by..."

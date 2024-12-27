@@ -8,7 +8,7 @@ source "${SCRIPT_DIR}/ios_build_functions.sh"
 
 function setup ()
 {
-    if [ "${ROOT_PATH}/External/libgit2-ios/libgit2-ios.a" -nt "${ROOT_PATH}/External/libgit2" ]
+    if [ "${ROOT_PATH}/External/libgit2-ios/lib/libgit2-ios.a" -nt "${ROOT_PATH}/External/libgit2" ]
     then
         echo "No update needed."
         exit 0
@@ -26,6 +26,8 @@ function build_libgit2 ()
     rm -rf "build"
     mkdir "build"
 
+    mkdir -p "${ROOT_PATH}/External/libgit2-ios/lib"
+
     pushd "build" > /dev/null
 
     # LOL Cmake
@@ -35,7 +37,9 @@ function build_libgit2 ()
     fi
 
     # install the each built arch somewhere sane
-    INSTALL_PREFIX="${LIB_PATH}/${SDKNAME}-${ARCH}.sdk"
+    INSTALL_PREFIX="${ROOT_PATH}/External/libgit2-ios/bin/${PLATFORM}-${ARCH}.sdk"
+
+    # echo "${INSTALL_PREFIX}"
 
     mkdir -p "${INSTALL_PREFIX}"
 
@@ -45,7 +49,7 @@ function build_libgit2 ()
     cmake \
         -DCMAKE_C_COMPILER_WORKS:BOOL=ON \
         -DBUILD_SHARED_LIBS:BOOL=OFF \
-        -DCMAKE_PREFIX_PATH:PATH="${ROOT_PATH}/External/libssh2-ios/bin/${SDKNAME}-${ARCH}.sdk" \
+        -DCMAKE_PREFIX_PATH:PATH="${ROOT_PATH}/External/libssh2-ios/bin/${SDKROOT}-${ARCH}.sdk" \
         -DPKG_CONFIG_USE_CMAKE_PREFIX_PATH:BOOL=ON \
         -DCMAKE_INSTALL_PREFIX:PATH="${INSTALL_PREFIX}/" \
         -DBUILD_CLAR:BOOL=OFF \
@@ -66,11 +70,41 @@ function fat_binary ()
 {
     echo "Building fat binary..."
 
-    lipo -create "${BUILT_LIB_PATHS[@]}" -output "${ROOT_PATH}/External/libgit2-ios/libgit2-ios.a"
+    mkdir -p "${ROOT_PATH}/External/libgit2-ios/lib/simulator"
+    mkdir -p "${ROOT_PATH}/External/libgit2-ios/lib/device"
+
+    SIMULATOR_LIBS=()
+    DEVICE_LIBS=()
+    SIMULATOR_LIBS+=("${ROOT_PATH}/External/libgit2-ios/bin/iphonesimulator-x86_64.sdk/lib/libgit2.a")
+    SIMULATOR_LIBS+=("${ROOT_PATH}/External/libgit2-ios/bin/iphonesimulator-arm64.sdk/lib/libgit2.a")
+
+    DEVICE_LIBS+=("${ROOT_PATH}/External/libgit2-ios/bin/iphoneos-arm64.sdk/lib/libgit2.a")
+
+    # 创建模拟器的 fat binary
+    if [ ${#SIMULATOR_LIBS[@]} -gt 0 ]; then
+        echo "Creating simulator binaries..."
+        lipo -create ${SIMULATOR_LIBS[@]} -output "${ROOT_PATH}/External/libgit2-ios/lib/simulator/libgit2.a"
+    fi
+
+    if [ ${#DEVICE_LIBS[@]} -gt 0 ]; then
+        echo "Creating simulator binaries..."
+        lipo -create ${DEVICE_LIBS[@]} -output "${ROOT_PATH}/External/libgit2-ios/lib/device/libgit2.a"
+    fi
+
+    ln -sf simulator/libgit2.a "${ROOT_PATH}/External/libgit2-ios/libgit2-ios.a"
+    
+    echo "Build results:"
+    echo "Simulator libraries: ${ROOT_PATH}/External/libgit2-ios/lib/simulator/"
+    echo "Device libraries: ${ROOT_PATH}/External/libgit2-ios/lib/device/"
+    
+    # 验证构建的库
+    echo "Verifying architectures in built libraries:"
+    echo "Simulator libgit:"
+    lipo -info "${ROOT_PATH}/External/libgit2-ios/lib/simulator/libgit2.a"
+    echo "Device libgit2:"
+    lipo -info "${ROOT_PATH}/External/libgit2-ios/lib/device/libgit2.a"
 
     echo "Building done."
-
-    popd > /dev/null
 }
 
 build_all_archs setup build_libgit2 fat_binary

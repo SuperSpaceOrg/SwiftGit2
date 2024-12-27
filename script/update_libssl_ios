@@ -6,7 +6,7 @@ source "${SCRIPT_DIR}/ios_build_functions.sh"
 
 function setup ()
 {
-    if [ -f "${ROOT_PATH}/External/ios-openssl/lib/libssl.a" ] && [ -f "${ROOT_PATH}/External/ios-openssl/lib/libcrypto.a" ] && [ -d "${ROOT_PATH}/External/ios-openssl/include" ]
+    if [ -f "${ROOT_PATH}/External/ios-openssl/simulator/lib/libssl.a" ] && [ -f "${ROOT_PATH}/External/ios-openssl/simulator/lib/libcrypto.a" ] && [ -d "${ROOT_PATH}/External/ios-openssl/simulator/include" ]
     then
         echo "No update needed."
         exit 0
