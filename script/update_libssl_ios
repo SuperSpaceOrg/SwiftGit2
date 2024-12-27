@@ -109,13 +109,9 @@ function fat_binary() {
         lipo -create ${DEVICE_SSL_LIBS[@]} -output "${ROOT_PATH}/External/ios-openssl/device/lib/libssl.a"
     fi
     
-    # 创建默认符号链接(指向模拟器版本)
-    ln -sf simulator/libcrypto.a "${ROOT_PATH}/External/ios-openssl/simulator/lib/libcrypto.a"
-    ln -sf simulator/libssl.a "${ROOT_PATH}/External/ios-openssl/simulator/lib/libssl.a"
-    
     echo "Build results:"
-    echo "Simulator libraries: ${ROOT_PATH}/External/ios-openssl/lib/simulator/"
-    echo "Device libraries: ${ROOT_PATH}/External/ios-openssl/lib/device/"
+    echo "Simulator libraries: ${ROOT_PATH}/External/ios-openssl/simulator/lib"
+    echo "Device libraries: ${ROOT_PATH}/External/ios-openssl/device/lib"
     
     # 验证构建的库
     echo "Verifying architectures in built libraries:"
