@@ -712,7 +712,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = script/update_libssh2_ios;
+			shellScript = "script/update_libssh2_ios\n";
 		};
 		BEB31F931A0E567000F525B9 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;

@@ -24,30 +24,72 @@ function build_ssh2 ()
     cp -R "${ROOT_PATH}/External/libssh2" "${ROOT_PATH}/External/libssh2-ios/src/"
     pushd "${ROOT_PATH}/External/libssh2-ios/src/libssh2" > /dev/null
 
-    export CFLAGS="-arch ${ARCH} -fembed-bitcode -pipe -no-cpp-precomp -isysroot ${SDKROOT} -miphoneos-version-min=${IPHONEOS_DEPLOYMENT_TARGET}"
-    export CPPFLAGS="-arch ${ARCH} -fembed-bitcode -pipe -no-cpp-precomp -isysroot ${SDKROOT} -miphoneos-version-min=${IPHONEOS_DEPLOYMENT_TARGET}"
+    if [ "${PLATFORM}" == "iphonesimulator" ]; 
+    then
+        export CFLAGS="-arch ${ARCH} -pipe -no-cpp-precomp -isysroot ${SDKROOT} -miphonesimulator-version-min=${IPHONEOS_DEPLOYMENT_TARGET}"
+        export CPPFLAGS="-arch ${ARCH} -pipe -no-cpp-precomp -isysroot ${SDKROOT} -miphonesimulator-version-min=${IPHONEOS_DEPLOYMENT_TARGET}"
+    else 
+        export CFLAGS="-arch ${ARCH} -fembed-bitcode -pipe -no-cpp-precomp -isysroot ${SDKROOT} -miphoneos-version-min=${IPHONEOS_DEPLOYMENT_TARGET}"
+        export CPPFLAGS="-arch ${ARCH} -fembed-bitcode -pipe -no-cpp-precomp -isysroot ${SDKROOT} -miphoneos-version-min=${IPHONEOS_DEPLOYMENT_TARGET}"
+    fi
 
-    mkdir -p "${ROOT_PATH}/External/libssh2-ios/bin/${SDKNAME}-${ARCH}.sdk"
-    LOG="${ROOT_PATH}/External/libssh2-ios/bin/${SDKNAME}-${ARCH}.sdk/build-libssh2.log"
+    mkdir -p "${ROOT_PATH}/External/libssh2-ios/bin/${PLATFORM}-${ARCH}.sdk"
+    LOG="${ROOT_PATH}/External/libssh2-ios/bin/${PLATFORM}-${ARCH}.sdk/build-libssh2.log"
 
     echo "${LOG}"
 
+    echo "${ROOT_PATH}/External/ios-openssl/simulator"
+
     ./buildconf >> "${LOG}" 2>&1
-    ./configure --host=${HOST} --prefix="${ROOT_PATH}/External/libssh2-ios/bin/${SDKNAME}-${ARCH}.sdk" --with-openssl --with-libssl-prefix="${ROOT_PATH}/External/ios-openssl" --disable-shared --enable-static >> "${LOG}" 2>&1
+    if [ "${PLATFORM}" == "iphonesimulator" ]; then
+        ./configure --host=${HOST} --prefix="${ROOT_PATH}/External/libssh2-ios/bin/${PLATFORM}-${ARCH}.sdk" --with-openssl --with-libssl-prefix="${ROOT_PATH}/External/ios-openssl/simulator" --disable-shared --enable-static >> "${LOG}" 2>&1
+    else
+        ./configure --host=${HOST} --prefix="${ROOT_PATH}/External/libssh2-ios/bin/${PLATFORM}-${ARCH}.sdk" --with-openssl --with-libssl-prefix="${ROOT_PATH}/External/ios-openssl/device" --disable-shared --enable-static >> "${LOG}" 2>&1
+    fi
     make >> "${LOG}" 2>&1
     make install >> "${LOG}" 2>&1
     popd > /dev/null
 
-    BUILT_LIBS+=("${ROOT_PATH}/External/libssh2-ios/bin/${SDKNAME}-${ARCH}.sdk/lib/libssh2.a")
+    BUILT_LIBS+=("${ROOT_PATH}/External/libssh2-ios/bin/${PLATFORM}-${ARCH}.sdk/lib/libssh2.a")
 }
 
 function fat_binary ()
 {
     echo "Building fat binary..."
 
-    lipo -create "${BUILT_LIBS[@]}" -output "${ROOT_PATH}/External/libssh2-ios/lib/libssh2-ios.a"
-    mkdir -p "${ROOT_PATH}/External/libssh2-ios/include/libssh2"
-    cp -R "${ROOT_PATH}/External/libssh2-ios/bin/iphonesimulator${SDKVERSION}-x86_64.sdk/include/libssh2.h" "${ROOT_PATH}/External/libssh2-ios/include/libssh2/"
+    mkdir -p "${ROOT_PATH}/External/libssh2-ios/lib/simulator"
+    mkdir -p "${ROOT_PATH}/External/libssh2-ios/lib/device"
+
+    SIMULATOR_LIBS=()
+    DEVICE_LIBS=()
+    SIMULATOR_LIBS+=("${ROOT_PATH}/External/libssh2-ios/bin/iphonesimulator-x86_64.sdk/lib/libssh2.a")
+    SIMULATOR_LIBS+=("${ROOT_PATH}/External/libssh2-ios/bin/iphonesimulator-arm64.sdk/lib/libssh2.a")
+
+    DEVICE_LIBS+=("${ROOT_PATH}/External/libssh2-ios/bin/iphoneos-arm64.sdk/lib/libssh2.a")
+
+    # 创建模拟器的 fat binary
+    if [ ${#SIMULATOR_LIBS[@]} -gt 0 ]; then
+        echo "Creating simulator binaries..."
+        lipo -create ${SIMULATOR_LIBS[@]} -output "${ROOT_PATH}/External/libssh2-ios/lib/simulator/libssh2-ios.a"
+    fi
+
+    if [ ${#DEVICE_LIBS[@]} -gt 0 ]; then
+        echo "Creating simulator binaries..."
+        lipo -create ${DEVICE_LIBS[@]} -output "${ROOT_PATH}/External/libssh2-ios/lib/device/libssh2-ios.a"
+    fi
+
+    ln -sf simulator/libssh2-ios.a "${ROOT_PATH}/External/libssh2-ios/lib/libssh2-ios.a"
+    
+    echo "Build results:"
+    echo "Simulator libraries: ${ROOT_PATH}/External/libssh2-ios/lib/simulator/"
+    echo "Device libraries: ${ROOT_PATH}/External/libssh2-ios/lib/device/"
+    
+    # 验证构建的库
+    echo "Verifying architectures in built libraries:"
+    echo "Simulator libssh2-ios:"
+    lipo -info "${ROOT_PATH}/External/libssh2-ios/lib/simulator/libssh2-ios.a"
+    echo "Device libssh2-ios:"
+    lipo -info "${ROOT_PATH}/External/libssh2-ios/lib/device/libssh2-ios.a"
 
     echo "Building done."
 }

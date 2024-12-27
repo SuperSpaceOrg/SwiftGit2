@@ -23,16 +23,15 @@ function cleanup ()
     rm -rf "/tmp/openssl-*.log"
 }
 
-function build_ssl () 
-{
+function build_ssl() {
     rm -rf "/tmp/openssl"
     cp -r "${ROOT_PATH}/External/openssl" "/tmp/"
+    
     pushd "/tmp/openssl" > /dev/null
-
-    LOG="/tmp/openssl-${ARCH}.log"
-
-    if [ "${ARCH}" == "arm64" ] || [ "${ARCH}" == "x86_64" ]
-    then
+    LOG="/tmp/openssl-${PLATFORM}-${ARCH}.log"
+    
+    # 根据平台和架构设置不同的配置
+    if [ "${ARCH}" == "arm64" ] || [ "${ARCH}" == "x86_64" ]; then
         HOST="BSD-generic64"
         CONFIG="no-gost no-asm enable-ec_nistp_64_gcc_128"
     else
@@ -40,33 +39,95 @@ function build_ssl ()
         CONFIG="no-gost no-asm"
         perl -i -pe 's|static volatile sig_atomic_t intr_signal|static volatile int intr_signal|' crypto/ui/ui_openssl.c
     fi
-    echo "$LOG"
-
-    ./Configure ${HOST} ${CONFIG} --openssldir="/tmp/openssl-${ARCH}" >> "${LOG}" 2>&1
-    perl -i -pe "s|^CC= gcc|CC= ${CLANG} -miphoneos-version-min=${IPHONEOS_DEPLOYMENT_TARGET} -arch ${ARCH} -fembed-bitcode |g" Makefile >> "${LOG}" 2>&1
+    
+    echo "Building OpenSSL for ${PLATFORM} ${ARCH}"
+    echo "Log file: $LOG"
+    
+    # 配置编译标志
+    if [ "${PLATFORM}" == "iphonesimulator" ]; then
+        MIN_VERSION_FLAG="-mios-simulator-version-min=${IPHONEOS_DEPLOYMENT_TARGET}"
+    else
+        MIN_VERSION_FLAG="-miphoneos-version-min=${IPHONEOS_DEPLOYMENT_TARGET}"
+    fi
+    
+    ./Configure ${HOST} ${CONFIG} --openssldir="/tmp/openssl-${PLATFORM}-${ARCH}" >> "${LOG}" 2>&1
+    
+    # 修改 Makefile 添加正确的编译器标志
+    perl -i -pe "s|^CC= gcc|CC= ${CLANG} ${MIN_VERSION_FLAG} -arch ${ARCH} -fembed-bitcode |g" Makefile >> "${LOG}" 2>&1
     perl -i -pe "s|^CFLAG= (.*)|CFLAG= -isysroot ${SDKROOT} \$1|g" Makefile >> "${LOG}" 2>&1
+    
     make >> "${LOG}" 2>&1
-
     make install_sw >> "${LOG}" 2>&1
+    
     popd > /dev/null
     rm -rf "/tmp/openssl"
-
-    BUILT_CRYPTO_PATHS+=("/tmp/openssl-${ARCH}/lib/libcrypto.a")
-    BUILT_SSL_PATHS+=("/tmp/openssl-${ARCH}/lib/libssl.a")
+    
+    BUILT_CRYPTO_PATHS+=("/tmp/openssl-${PLATFORM}-${ARCH}/lib/libcrypto.a")
+    BUILT_SSL_PATHS+=("/tmp/openssl-${PLATFORM}-${ARCH}/lib/libssl.a")
 }
 
-function fat_binary ()
-{
+function fat_binary() {
     echo "Building fat binary..."
+    # 创建目录结构
+    mkdir -p "${ROOT_PATH}/External/ios-openssl/simulator"
+    mkdir -p "${ROOT_PATH}/External/ios-openssl/device"
+    mkdir -p "${ROOT_PATH}/External/ios-openssl/simulator/include"
+    mkdir -p "${ROOT_PATH}/External/ios-openssl/device/include"
+    mkdir -p "${ROOT_PATH}/External/ios-openssl/simulator/lib"
+    mkdir -p "${ROOT_PATH}/External/ios-openssl/device/lib"
+    
+    # 复制头文件(使用x86_64的头文件)
+    cp -r "/tmp/openssl-iphonesimulator-x86_64/include/openssl" "${ROOT_PATH}/External/ios-openssl/simulator/include/"
+    cp -r "/tmp/openssl-iphonesimulator-x86_64/include/openssl" "${ROOT_PATH}/External/ios-openssl/device/include/"
 
-    mkdir -p "${ROOT_PATH}/External/ios-openssl/include"
-    cp -r /tmp/openssl-x86_64/include/openssl "${ROOT_PATH}/External/ios-openssl/include/"
+    SIMULATOR_CRYPTO_LIBS=()
+    SIMULATOR_CRYPTO_LIBS+=("/tmp/openssl-iphonesimulator-x86_64/lib/libcrypto.a")
+    SIMULATOR_CRYPTO_LIBS+=("/tmp/openssl-iphonesimulator-arm64/lib/libcrypto.a")
 
-    mkdir -p "${ROOT_PATH}/External/ios-openssl/lib"
+    SIMULATOR_SSL_LIBS=()
+    SIMULATOR_SSL_LIBS+=("/tmp/openssl-iphonesimulator-x86_64/lib/libssl.a")
+    SIMULATOR_SSL_LIBS+=("/tmp/openssl-iphonesimulator-arm64/lib/libssl.a")
+    
+    # 创建模拟器的 fat binary
+    if [ ${#SIMULATOR_CRYPTO_LIBS[@]} -gt 0 ]; then
+        echo "Creating simulator binaries..."
+        echo "Simulator crypto libs: ${SIMULATOR_CRYPTO_LIBS[@]}"
+        lipo -create ${SIMULATOR_CRYPTO_LIBS[@]} -output "${ROOT_PATH}/External/ios-openssl/simulator/lib/libcrypto.a"
+        lipo -create ${SIMULATOR_SSL_LIBS[@]} -output "${ROOT_PATH}/External/ios-openssl/simulator/lib/libssl.a"
+    fi
 
-    lipo -create "${BUILT_CRYPTO_PATHS[@]}" -output "${ROOT_PATH}/External/ios-openssl/lib/libcrypto.a"
-    lipo -create "${BUILT_SSL_PATHS[@]}" -output "${ROOT_PATH}/External/ios-openssl/lib/libssl.a"
-
+    DEVICE_CRYPTO_LIBS=()
+    DEVICE_CRYPTO_LIBS+=("/tmp/openssl-iphoneos-arm64/lib/libcrypto.a")
+    DEVICE_SSL_LIBS=()
+    DEVICE_SSL_LIBS+=("/tmp/openssl-iphoneos-arm64/lib/libssl.a")
+    
+    # 创建设备版本
+    if [ ${#DEVICE_CRYPTO_LIBS[@]} -gt 0 ]; then
+        echo "Creating device binaries..."
+        echo "Device crypto libs: ${DEVICE_CRYPTO_LIBS[@]}"
+        lipo -create ${DEVICE_CRYPTO_LIBS[@]} -output "${ROOT_PATH}/External/ios-openssl/device/lib/libcrypto.a"
+        lipo -create ${DEVICE_SSL_LIBS[@]} -output "${ROOT_PATH}/External/ios-openssl/device/lib/libssl.a"
+    fi
+    
+    # 创建默认符号链接(指向模拟器版本)
+    ln -sf simulator/libcrypto.a "${ROOT_PATH}/External/ios-openssl/simulator/lib/libcrypto.a"
+    ln -sf simulator/libssl.a "${ROOT_PATH}/External/ios-openssl/simulator/lib/libssl.a"
+    
+    echo "Build results:"
+    echo "Simulator libraries: ${ROOT_PATH}/External/ios-openssl/lib/simulator/"
+    echo "Device libraries: ${ROOT_PATH}/External/ios-openssl/lib/device/"
+    
+    # 验证构建的库
+    echo "Verifying architectures in built libraries:"
+    echo "Simulator crypto:"
+    lipo -info "${ROOT_PATH}/External/ios-openssl/simulator/lib/libcrypto.a"
+    echo "Simulator ssl:"
+    lipo -info "${ROOT_PATH}/External/ios-openssl/simulator/lib/libssl.a"
+    echo "Device crypto:"
+    lipo -info "${ROOT_PATH}/External/ios-openssl/device/lib/libcrypto.a"
+    echo "Device ssl:"
+    lipo -info "${ROOT_PATH}/External/ios-openssl/device/lib/libssl.a"
+    
     echo "Building done."
 }
 
